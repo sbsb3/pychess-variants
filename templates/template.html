@@ -114,6 +114,7 @@
                         </span>
                         <span class="provider-name">Lishogi</span>
                     </a>
+                    {% if google_login %}
                     <a class="login-option" href="/login/google" role="menuitem">
                         <span class="provider-icon google-icon">
                             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -125,6 +126,7 @@
                         </span>
                         <span class="provider-name">Google</span>
                     </a>
+                    {% endif %}
                     <a class="login-option" href="/login/discord" role="menuitem">
                         <span class="provider-icon discord-icon">
                             <svg viewBox="0 0 24 24" fill="currentColor">

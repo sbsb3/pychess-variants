@@ -832,6 +832,8 @@ class PychessGlobalAppState:
         env.globals["asseturl"] = STATIC_ROOT
         env.globals["nnue_download_root"] = NNUE_DOWNLOAD_ROOT
         env.globals["home"] = URI
+        # Hide the Google login option unless Google OAuth credentials are configured.
+        env.globals["google_login"] = bool(os.getenv("GOOGLE_CLIENT_ID"))
 
     def __start_bots(self):
         rm = self.users["Random-Mover"]
