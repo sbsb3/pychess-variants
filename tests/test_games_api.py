@@ -153,7 +153,7 @@ class GamesApiCategoryFilterTestCase(AioHTTPTestCase):
 
     async def test_direct_anonymous_profile_uses_restricted_rendering(self):
         app_state = get_app_state(self.app)
-        await app_state.db.ublog_post.insert_one(
+        await app_state.db.ublog_post2.insert_one(
             {
                 "_id": "restricted-profile-post",
                 "author": self.profile_probe,
@@ -175,7 +175,7 @@ class GamesApiCategoryFilterTestCase(AioHTTPTestCase):
 
     async def test_internal_profile_navigation_keeps_full_rendering(self):
         app_state = get_app_state(self.app)
-        await app_state.db.ublog_post.insert_one(
+        await app_state.db.ublog_post2.insert_one(
             {
                 "_id": "internal-profile-post",
                 "author": self.profile_probe,
@@ -272,7 +272,7 @@ class GamesApiCategoryFilterTestCase(AioHTTPTestCase):
         response = await self.client.get(f"/@/{self.user.username}/perf/notavariant")
         self.assertEqual(response.status, 404)
         text = await response.text()
-        self.assertIn("Page not found!", text)
+        self.assertIn("Page not found.", text)
 
     async def test_api_profile_perf_unknown_variant_returns_empty(self):
         self.set_session_user(self.user.username)

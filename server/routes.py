@@ -4,21 +4,14 @@ from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
 from account_api import (
-    account_bot,
     account_bot_token_create,
     account_bot_token_revoke,
     account_bot_upgrade_post,
-    account_close,
     account_close_post,
-    account_delete,
     account_delete_post,
     account_engine_token_create,
     account_engine_token_revoke,
-    account_engines,
-    account_home,
-    account_personal_data,
     account_personal_data_export,
-    account_reopen,
     account_reopen_post,
 )
 from admin_api import admin_user_action
@@ -40,7 +33,7 @@ from bot_api import (
     upgrade_account,
 )
 from bug.import_bugh_game import import_game_bpgn
-from catalogued_variants import (
+from catalogued.http import (
     archive_catalogued_variant,
     check_catalogued_variant_rules,
     clone_catalogued_variant,
@@ -225,6 +218,9 @@ from views import (
     winners,
 )
 from views import (
+    account as account_view,
+)
+from views import (
     admin as admin_view,
 )
 from views import (
@@ -262,20 +258,20 @@ RouteDef: TypeAlias = tuple[str, Handler]
 
 
 get_routes: tuple[RouteDef, ...] = (
-    ("/account/engines", account_engines),
+    ("/account/engines", account_view.account_engines),
     ("/api/external-engine", list_engines),
     ("/login", login_choice),
     ("/login/{provider}", login),
     ("/oauth/{provider}", oauth),
-    ("/account", account_home),
-    ("/account/personal-data", account_personal_data),
+    ("/account", account_view.account_home),
+    ("/account/personal-data", account_view.account_personal_data),
     ("/account/personal-data/export", account_personal_data_export),
-    ("/account/data", account_personal_data),
+    ("/account/data", account_view.account_personal_data),
     ("/account/data/export", account_personal_data_export),
-    ("/account/bot", account_bot),
-    ("/account/close", account_close),
-    ("/account/delete", account_delete),
-    ("/account/reopen", account_reopen),
+    ("/account/bot", account_view.account_bot),
+    ("/account/close", account_view.account_close),
+    ("/account/delete", account_view.account_delete),
+    ("/account/reopen", account_view.account_reopen),
     ("/select-username", select_username),
     ("/", lobby.lobby),
     ("/timeline", timeline.timeline),
@@ -369,6 +365,8 @@ get_routes: tuple[RouteDef, ...] = (
     ("/admin/teams", admin_view.admin_teams),
     ("/admin/system-messages", admin_system_messages_view.admin_system_messages),
     ("/admin/operations", admin_view.admin_operations),
+    ("/admin/fair-play", admin_view.admin_fair_play),
+    (r"/admin/fair-play/overlay/{reportId:[0-9a-fA-F]{24}}", admin_view.admin_overlay_download),
     ("/reports", reports_view.reports),
     ("/mod/public-chat", mod_public_chat_view.mod_public_chat),
     ("/challenges", get_header_challenges),
@@ -426,8 +424,6 @@ get_routes: tuple[RouteDef, ...] = (
     ("/level8win", level8win.level8win),
     ("/patron", patron.patron),
     ("/patron/thanks", patron.patron),
-    ("/blogs/image", ublog.image_proxy_external),
-    (r"/blogs/image/{postId:\w{8}}", ublog.image_proxy),
     (r"/blogs/discuss/{postId:\w{8}}", ublog.discuss),
     ("/blogs/community", ublog.community),
     ("/blogs/@/{profileId}", ublog.user_blog),

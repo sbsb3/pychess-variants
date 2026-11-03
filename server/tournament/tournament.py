@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from operator import neg
+from time import monotonic
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -91,6 +92,7 @@ BERGER_NORM = 2
 
 NOTIFY1_MINUTES = 60 * 6
 NOTIFY2_MINUTES = 10
+DISCORD_REMINDER_TIMEOUT = 30
 AUTO_ROUND_INTERVAL = -1
 MANUAL_ROUND_INTERVAL = -2
 MIN_AUTO_ROUND_INTERVAL_SECONDS = 10
@@ -160,6 +162,7 @@ class PlayerData:
     __slots__ = (
         "berger",
         "color_balance",
+        "color_streak",
         "free",
         "games",
         "id",
@@ -177,6 +180,7 @@ class PlayerData:
         "rating",
         "title",
         "username",
+        "waiting_since",
         "win_streak",
         "withdrawn",
     )
@@ -203,6 +207,8 @@ class PlayerData:
         self.berger: int = 0
         self.prev_opp: str = ""
         self.color_balance: int = 0  # +1 when played as white, -1 when played as black
+        self.color_streak: int = 0  # Positive for consecutive whites, negative for blacks.
+        self.waiting_since: float | None = None  # Arena queue age; not persisted across restarts.
         # Swiss-only: first round in which the player can be paired.
         self.joined_round: int = 1
         self.joined_at: datetime = datetime.now(UTC)
@@ -1009,6 +1015,7 @@ class Tournament(ABC):
 
     def waiting_players(self) -> list[User]:
         waiting: list[User] = []
+        now = monotonic() if self.system == ARENA else None
         for player in self.leaderboard:
             player_data = self.player_data_by_name(player.username)
             if player_data is None:
@@ -1020,18 +1027,31 @@ class Tournament(ABC):
                 continue
 
             if not player_data.free or player_data.paused or player_data.withdrawn:
+                player_data.waiting_since = None
                 continue
 
             # Fixed-round events keep pairability in persisted tournament state instead of tying it
             # to whichever page socket the user currently has open. Arena still pairs only connected
             # players because its rolling waves depend on live availability.
-            if self.system != ARENA or len(self.player_round_sockets(player, player_data)) > 0:
-                waiting.append(player)
+            if self.system == ARENA:
+                if not self.player_round_sockets(player, player_data):
+                    player_data.waiting_since = None
+                    continue
+                if player_data.waiting_since is None:
+                    player_data.waiting_since = now
+            waiting.append(player)
 
         return waiting
 
     async def send_scheduled_start_reminders(self) -> None:
         """Hook for tournament systems that notify registered players before start."""
+
+    async def _send_discord_start_reminder(self, message: str) -> None:
+        try:
+            async with asyncio.timeout(DISCORD_REMINDER_TIMEOUT):
+                await self.app_state.discord.send_to_discord("notify_tournament", message)
+        except Exception:
+            log.exception("Failed to send Discord start reminder for tournament %s", self.id)
 
     async def clock(self):
         try:
@@ -1080,17 +1100,22 @@ class Tournament(ABC):
                         self.notify1 = True
                         self.notify2 = True
                         await self.send_scheduled_start_reminders()
-                        await self.app_state.discord.send_to_discord(
-                            "notify_tournament",
-                            self.notify_discord_msg(remaining_mins_to_start),
+                        # Discord readiness/network waits must not block the tournament clock.
+                        self.app_state.create_background_task(
+                            self._send_discord_start_reminder(
+                                self.notify_discord_msg(remaining_mins_to_start)
+                            ),
+                            name="t-discord-reminder-%s" % self.id,
                         )
                         continue
 
                     elif (not self.notify1) and remaining_mins_to_start <= NOTIFY1_MINUTES:
                         self.notify1 = True
-                        await self.app_state.discord.send_to_discord(
-                            "notify_tournament",
-                            self.notify_discord_msg(remaining_mins_to_start),
+                        self.app_state.create_background_task(
+                            self._send_discord_start_reminder(
+                                self.notify_discord_msg(remaining_mins_to_start)
+                            ),
+                            name="t-discord-reminder-%s" % self.id,
                         )
                         self.app_state.create_background_task(
                             lichess_team_msg(self.app_state),
@@ -1657,6 +1682,7 @@ class Tournament(ABC):
             return
         player_data.paused = False
         player_data.withdrawn = True
+        player_data.waiting_since = None
 
         if self.pop_leaderboard_player_by_username(user.username) is not None:
             self.nb_players -= 1
@@ -1678,6 +1704,7 @@ class Tournament(ABC):
             )
             return
         player_data.paused = True
+        player_data.waiting_since = None
 
         await self.db_update_player(user, "PAUSE")
 
@@ -1691,6 +1718,10 @@ class Tournament(ABC):
 
     def spactator_leave(self, spectator: User) -> None:
         self.spectators.discard(spectator)
+        if self.system == ARENA:
+            player_data = self.player_data_by_name(spectator.username)
+            if player_data is not None and not self.player_round_sockets(spectator, player_data):
+                player_data.waiting_since = None
 
     async def create_new_pairings(
         self,
@@ -1866,6 +1897,8 @@ class Tournament(ABC):
 
         wplayer.games.append(game)
         bplayer.games.append(game)
+        wplayer.waiting_since = None
+        bplayer.waiting_since = None
 
         if game.result == "*":
             wplayer.free = False
@@ -1876,6 +1909,8 @@ class Tournament(ABC):
 
         wplayer.color_balance += 1
         bplayer.color_balance -= 1
+        wplayer.color_streak = max(1, wplayer.color_streak + 1)
+        bplayer.color_streak = min(-1, bplayer.color_streak - 1)
 
         wplayer.nb_not_paired = 0
         bplayer.nb_not_paired = 0

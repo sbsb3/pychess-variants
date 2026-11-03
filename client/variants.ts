@@ -4,7 +4,7 @@ import * as cg from 'chessgroundx/types';
 import * as util from 'chessgroundx/util';
 import { read as readFen } from 'chessgroundx/fen';
 
-import { registerCataloguedPremove, unregisterCataloguedPremove } from './cataloguedPremove';
+import { registerCataloguedPremove, unregisterCataloguedPremove } from './premove';
 
 import {
     BoardMarkType,
@@ -2149,7 +2149,7 @@ export const noPuzzleVariants = [
 export const twoBoarsVariants = variants.filter(v => VARIANTS[v].twoBoards);
 export const unsupportedAiVariants = ['fogofwar', 'jieqi'];
 
-export const devVariants = ['borderlands', 'cwda', 'makbug', 'supply', 'yokai'];
+export const devVariants = ['borderlands', 'cwda', 'makbug', 'supply'];
 export const CATALOGUED_VARIANT_ICON = '☐';
 
 export interface CataloguedVariantClientDocument {
